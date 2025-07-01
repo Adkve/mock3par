@@ -339,6 +339,74 @@
     }
     .result-button:hover { background: #2980b9; }
 
+    /* New styles for detailed explanation section */
+    .explanation-section {
+        margin-top: 50px;
+        border-top: 2px solid #ccc;
+        padding-top: 30px;
+    }
+    .explanation-section h2 {
+        text-align: center;
+        color: #1a5276;
+        font-size: 2.2em;
+        margin-bottom: 30px;
+    }
+    .explanation-question {
+        background: #ffffff;
+        padding: 20px;
+        margin-bottom: 20px;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+    }
+    .explanation-question p.question-text {
+        font-weight: 600;
+        font-size: 1.1em;
+        color: #2c3e50;
+        margin-bottom: 10px;
+    }
+    .explanation-question img {
+        max-width: 100%;
+        height: auto;
+        display: block;
+        margin-bottom: 15px;
+        border-radius: 5px;
+    }
+    .explanation-question .option-display {
+        padding: 8px 12px;
+        margin-bottom: 5px;
+        border-radius: 5px;
+        font-size: 0.95em;
+        display: flex;
+        align-items: center;
+    }
+    .option-display.correct {
+        background-color: #d4edda; /* Light green */
+        border: 1px solid #28a745; /* Green */
+        color: #155724; /* Dark green text */
+    }
+    .option-display.incorrect {
+        background-color: #f8d7da; /* Light red */
+        border: 1px solid #dc3545; /* Red */
+        color: #721c24; /* Dark red text */
+    }
+    .option-display.unattempted {
+        background-color: #e2e3e5; /* Light grey */
+        border: 1px solid #6c757d; /* Grey */
+        color: #383d41; /* Dark grey text */
+    }
+    .option-display strong {
+        margin-right: 8px;
+    }
+    .option-display .icon {
+        margin-right: 8px;
+        font-size: 1.2em;
+    }
+    .option-display.correct .icon { color: #28a745; }
+    .option-display.incorrect .icon { color: #dc3545; }
+    .option-display.unattempted .icon { color: #6c757d; }
+
+    p { line-height: 1.6; margin-bottom: 5px;}
+
     /* Responsive adjustments */
     @media (max-width: 768px) {
       body { padding: 15px; }
@@ -1239,8 +1307,10 @@
     let timerInterval; // Declare timerInterval globally
     let submitted = false; // Flag to check if quiz is already submitted
 
-    // Global object to store question statuses
+    // Global object to store question statuses (attempted/unattempted)
     const questionStatuses = {};
+    // Global object to store user's selected answers
+    const userAnswers = {};
 
     // Get elements for initial screen and quiz content
     const introScreen = document.getElementById('intro-screen');
@@ -1334,6 +1404,7 @@
       questions.forEach((qDiv, index) => {
         const qName = `q${index + 1}`; // e.g., q1, q2
         questionStatuses[qName] = 'unattempted'; // Initial status
+        userAnswers[qName] = null; // Initialize user answer
 
         // Create a nav item for each question for the modal
         const navItem = document.createElement('span');
@@ -1364,6 +1435,7 @@
             if (radio.checked) {
                 radio.parentElement.classList.add('selected-option');
                 questionStatuses[qName] = 'attempted';
+                userAnswers[qName] = radio.value; // Store user's answer
                 updateQuestionNavUI(); // Update UI when a question is attempted
                 updateProgressBar(); // Update progress bar
             }
@@ -1430,6 +1502,16 @@
       const form = document.getElementById("quizForm");
       let totalScore = 0;
       const result = {};
+      const detailedExplanation = []; // Array to store detailed question results
+
+      // Iterate through all questions to capture final user answers
+      const allQuestionsInForm = form.querySelectorAll('.question');
+      allQuestionsInForm.forEach(qDiv => {
+          const qName = qDiv.id;
+          const selected = qDiv.querySelector(`input[name="${qName}"]:checked`);
+          userAnswers[qName] = selected ? selected.value : null;
+      });
+
 
       for (let section in sections) {
         let correct = 0, incorrect = 0, unattempted = 0;
@@ -1438,23 +1520,52 @@
         // Get question IDs for the current section
         const sectionQuestions = sections[section];
 
-        sectionQuestions.forEach(q => {
-          const selected = form.querySelector(`input[name="${q}"]:checked`);
-          if (!selected) {
+        sectionQuestions.forEach(qId => {
+          const userAnswer = userAnswers[qId];
+          const correctAnswer = correctAnswers[qId];
+          const questionElement = document.getElementById(qId); // Get the original question div
+          const questionImage = questionElement ? questionElement.querySelector('img').src : 'No Image';
+          const questionNumber = qId.replace('q', '');
+
+          let status = 'unattempted';
+          let userSelectionText = 'Not Attempted';
+
+          // Get the text of the selected option and correct option
+          const options = questionElement.querySelectorAll(`label input[name="${qId}"] + span`);
+          const correctOptionText = options[parseInt(correctAnswer) - 1] ? options[parseInt(correctAnswer) - 1].textContent : 'N/A';
+          if (userAnswer) {
+              userSelectionText = options[parseInt(userAnswer) - 1] ? options[parseInt(userAnswer) - 1].textContent : `Option ${userAnswer}`;
+          }
+
+
+          if (userAnswer === null) {
             unattempted++;
-          } else if (selected.value === correctAnswers[q]) {
+            status = 'unattempted';
+          } else if (userAnswer === correctAnswer) {
             correct++;
             sectionScore += 1; // +1 for correct answer
+            status = 'correct';
           } else {
             incorrect++;
             sectionScore -= 0.33; // -0.33 for incorrect answer
+            status = 'incorrect';
           }
+
+          detailedExplanation.push({
+              questionNumber: questionNumber,
+              questionImage: questionImage,
+              userAnswer: userAnswer,
+              userSelectionText: userSelectionText,
+              correctAnswer: correctAnswer,
+              correctOptionText: correctOptionText,
+              status: status
+          });
         });
-        
+
         totalScore += sectionScore; // Add section score to overall total
         result[section] = {
-          correct, 
-          incorrect, 
+          correct,
+          incorrect,
           unattempted,
           score: Math.max(0, sectionScore).toFixed(2) // Ensure section score is not negative
         };
@@ -1476,6 +1587,41 @@
       openNavBtn.style.cursor = "not-allowed";
       openNavBtn.style.opacity = "0.6";
 
+      // Generate detailed explanation HTML
+      const explanationHtml = detailedExplanation.map(q => {
+          let userDisplay = '';
+          let correctDisplay = '';
+          let questionStatusClass = '';
+          let userIcon = '';
+          let correctIcon = '✅';
+
+          if (q.status === 'correct') {
+              questionStatusClass = 'correct';
+              userIcon = '✅';
+              userDisplay = `<div class="option-display correct"><span class="icon">✅</span><strong>Your Answer:</strong> ${q.userSelectionText}</div>`;
+              correctDisplay = ``; // No need to show correct correct answer separately if user got it right
+          } else if (q.status === 'incorrect') {
+              questionStatusClass = 'incorrect';
+              userIcon = '❌';
+              userDisplay = `<div class="option-display incorrect"><span class="icon">❌</span><strong>Your Answer:</strong> ${q.userSelectionText}</div>`;
+              correctDisplay = `<div class="option-display correct"><span class="icon">✅</span><strong>Correct Answer:</strong> ${q.correctOptionText}</div>`;
+          } else { // unattempted
+              questionStatusClass = 'unattempted';
+              userIcon = '⚪';
+              userDisplay = `<div class="option-display unattempted"><span class="icon">⚪</span><strong>Your Answer:</strong> Not Attempted</div>`;
+              correctDisplay = `<div class="option-display correct"><span class="icon">✅</span><strong>Correct Answer:</strong> ${q.correctOptionText}</div>`;
+          }
+
+          return `
+              <div class="explanation-question">
+                  <p class="question-text">${q.questionNumber}. <img src="${q.questionImage}" alt="Question ${q.questionNumber}"></p>
+                  ${userDisplay}
+                  ${correctDisplay}
+              </div>
+          `;
+      }).join('');
+
+
       // Show results in a new window for easy viewing and printing
       const newWin = window.open("", "_blank");
       newWin.document.write(`
@@ -1485,42 +1631,118 @@
             <style>
               body { font-family: 'Inter', sans-serif; padding: 30px; background-color: #f4f7f9; color: #333; }
               h1 { color: #1a5276; text-align: center; margin-bottom: 40px; font-size: 2.8em; font-weight: 700; }
-              .section { 
-                margin-bottom: 25px; 
-                padding: 20px; 
-                background: #fff; 
-                border-left: 6px solid #3498db; 
-                border-radius: 10px; 
-                box-shadow: 0 5px 10px rgba(0,0,0,0.1); 
+              .section {
+                margin-bottom: 25px;
+                padding: 20px;
+                background: #fff;
+                border-left: 6px solid #3498db;
+                border-radius: 10px;
+                box-shadow: 0 5px 10px rgba(0,0,0,0.1);
               }
               .section h3 { margin-top: 0; color: #2980b9; font-size: 1.5em; margin-bottom: 10px; }
-              .total { 
-                margin-top: 40px; 
-                padding: 25px; 
-                text-align: center; 
-                font-size: 2.5em; 
-                font-weight: 700; 
-                color: #27ae60; 
-                background-color: #e8f5e9; 
-                border-radius: 12px; 
+              .total {
+                margin-top: 40px;
+                padding: 25px;
+                text-align: center;
+                font-size: 2.5em;
+                font-weight: 700;
+                color: #27ae60;
+                background-color: #e8f5e9;
+                border-radius: 12px;
                 border: 2px solid #27ae60;
                 box-shadow: 0 8px 16px rgba(0,0,0,0.15);
               }
-              button { 
-                display: block; 
-                width: 200px; 
-                margin: 40px auto 0; 
-                padding: 15px 25px; 
-                background: #3498db; 
-                color: #fff; 
-                border: none; 
-                border-radius: 8px; 
-                cursor: pointer; 
+              button {
+                display: block;
+                width: 200px;
+                margin: 40px auto 0;
+                padding: 15px 25px;
+                background: #3498db;
+                color: #fff;
+                border: none;
+                border-radius: 8px;
+                cursor: pointer;
                 font-size: 1.2em;
                 transition: background-color 0.3s ease;
               }
               button:hover { background: #2980b9; }
               p { line-height: 1.6; margin-bottom: 5px;}
+
+              /* Styles for the explanation section in the result page */
+              .explanation-section {
+                  margin-top: 50px;
+                  border-top: 2px solid #ccc;
+                  padding-top: 30px;
+              }
+              .explanation-section h2 {
+                  text-align: center;
+                  color: #1a5276;
+                  font-size: 2.2em;
+                  margin-bottom: 30px;
+              }
+              .explanation-question {
+                  background: #ffffff;
+                  padding: 20px;
+                  margin-bottom: 20px;
+                  border-radius: 10px;
+                  box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+              }
+              .explanation-question p.question-text {
+                  font-weight: 600;
+                  font-size: 1.1em;
+                  color: #2c3e50;
+                  margin-bottom: 10px;
+              }
+              .explanation-question img {
+                  max-width: 100%;
+                  height: auto;
+                  display: block;
+                  margin-bottom: 15px;
+                  border-radius: 5px;
+              }
+              .explanation-question .option-display {
+                  padding: 8px 12px;
+                  margin-bottom: 5px;
+                  border-radius: 5px;
+                  font-size: 0.95em;
+                  display: flex;
+                  align-items: center;
+              }
+              .option-display.correct {
+                  background-color: #d4edda; /* Light green */
+                  border: 1px solid #28a745; /* Green */
+                  color: #155724; /* Dark green text */
+              }
+              .option-display.incorrect {
+                  background-color: #f8d7da; /* Light red */
+                  border: 1px solid #dc3545; /* Red */
+                  color: #721c24; /* Dark red text */
+              }
+              .option-display.unattempted {
+                  background-color: #e2e3e5; /* Light grey */
+                  border: 1px solid #6c757d; /* Grey */
+                  color: #383d41; /* Dark grey text */
+              }
+              .option-display strong {
+                  margin-right: 8px;
+              }
+              .option-display .icon {
+                  margin-right: 8px;
+                  font-size: 1.2em;
+              }
+              .option-display.correct .icon { color: #28a745; }
+              .option-display.incorrect .icon { color: #dc3545; }
+              .option-display.unattempted .icon { color: #6c757d; }
+
+              @media (max-width: 768px) {
+                body { padding: 15px; }
+                h1 { font-size: 2.2em; }
+                .result-total { font-size: 2em; }
+                .explanation-section h2 { font-size: 1.8em; }
+                .explanation-question { padding: 15px; }
+                .explanation-question p.question-text { font-size: 1em; }
+                .explanation-question .option-display { font-size: 0.9em; }
+              }
             </style>
           </head>
           <body>
@@ -1536,6 +1758,11 @@
             `).join("")}
             <div class="total">🏁 Total Score: ${Math.max(0, totalScore).toFixed(2)}</div>
             <button onclick="window.print()">🖨️ Print Result</button>
+
+            <div class="explanation-section">
+                <h2>Detailed Analysis</h2>
+                ${explanationHtml}
+            </div>
           </body>
         </html>
       `);
